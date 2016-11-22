@@ -8,7 +8,7 @@ IMGFLAGS=
 all: Snake.c16
 
 Snake.c16: Snake.s
-	$(AS) $< $(ASFLAGS) -o $@
+	$(AS) $< $(ASFLAGS) -o $@ -m
 	ctags --language-force=asm $< 
 
 clean:

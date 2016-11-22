@@ -31,9 +31,9 @@
 ; Constants
 ;--------------------------------------
 SNAKE_SPR_W                equ   16
-SNAKE_SEG_NB_INIT          equ   12
-SNAKE_SEG_NB_MAX           equ   32
-SNAKE_SEG_MASK             equ   0x1f
+SNAKE_SEG_NB_INIT          equ   3
+SNAKE_SEG_NB_MAX           equ   8
+SNAKE_SEG_MASK             equ   0x7
 SCREEN_W                   equ   320
 SCREEN_TILES_HRZ           equ   20
 SCREEN_H                   equ   240
@@ -49,6 +49,7 @@ MAP_SIZE                   equ   280
 ; Graphics imports
 ;--------------------------------------
 importbin gfx/snake_seg.bin 0 128 spr_snake_seg
+importbin gfx/fruit0.bin 0 128 spr_fruit0
 importbin gfx/font.bin 0 3072 spr_font
 ;--------------------------------------
 
@@ -77,6 +78,23 @@ m_start:    ldi rc, 1                  ; Reset snake size
             stm r0, var_snake_pos_arr
 
 m_cyc_loop: nop
+            cls
+            bgc 1                      ; Black background
+            stm rf, var_snake_grew
+            stm rf, var_gotitem
+
+m_itm_spwn: rnd r0, 16                 ; Spawn an item approximately every 16
+            cmpi r0, 0                 ; cycles (~4 seconds with start speed)
+            jnz m_itm_spwZ
+is:         rnd r0, 20
+            rnd r1, 14
+            mov r2, r0
+            shl r2, 8
+            or r2, r1
+            stm r2, var_itemxy
+            ldi r2, 2
+            call sub_setmapv
+m_itm_spwZ: nop
 
 m_move_hd:  ldm r0, var_input_acc      ; Read controller 0
             andi r0, 0xf               ; Mask out all bits but Up,Dn,Lf,Rt
@@ -89,14 +107,23 @@ m_check_hd: mov r0, r8
             mov r1, r9
             shr r1, 4
             call sub_getmapv
-            cmpi r0, 0                 ; If the head moves to a non-zero cell...
-            jz m_check_hZ
+            cmpi r0, 0                 ; If the head hits a zero cell,
+            jz m_check_hZ              ; nothing happens
+            cmpi r0, 1                 ; If the head hits a one cell...
+            jnz m_check_hA
             call sub_death             ; ...it's game over!
             jmp m_start                ; Followed by a restart
+m_check_hA: cmpi r0, 2                 ; If the head hits a two cell...
+            jnz m_check_hZ
+            call sub_getitem           ; ...we got an item!
+            ldm r0, var_itemxy
+            call sub_unpack8b
+            ldi r2, 0
+            call sub_setmapv
 m_check_hZ: nop
             
 m_inc_size: addi ra, 1
-            stm rf, var_snake_grew
+            andi ra, SNAKE_SEG_MASK
             cmpi rc, SNAKE_SEG_NB_INIT ; Increase snake size if still going...
             jge m_inc_sizY             ; ...through initial growth phase...
             addi rc, 1 
@@ -134,9 +161,7 @@ m_updmap:   mov r0, ra                 ; Set new head map cell to 1 since it is
             call sub_setmapv
 m_updmaZ:   nop
 
-m_blit:     cls
-            bgc 1                      ; Black background
-            spr 0x0804                 ; Font sprite size is 8x8
+m_blit:     spr 0x0804                 ; Font sprite size is 8x8
             ldi r0, var_str_score      ; Print "SCORE: "
             ldi r1, 0
             ldi r2, 0
@@ -149,19 +174,30 @@ m_blit:     cls
             ldi r2, 0
             call sub_print
             spr 0x1008                 ; Snake sprite size is 16x16
-            mov r6, rb
+            ldm r0, var_itemxy
+            cmpi r0, 0                 ; If an item has spawned...
+            jz m_bliA                  ; ...draw it
+            call sub_unpack8b
+            shl r0, 4
+            shl r1, 4
+bi:         drw r0, r1, spr_fruit0
+m_bliA:     mov r6, rb
             mov r7, ra
             addi r7, 1
-m_bliA:     cmp r6, r7                 ; for (int i=0, o=snake_seg_offs;
-            jz m_bliZ                  ;      i!=snake_seg_num;
-            mov r0, r6                 ;   sub_blit_seg(0, o);   
-            call sub_blit_seg          ; }  
+            andi r7, SNAKE_SEG_MASK
+m_bliB:     cmp r6, r7
+            jz m_bliZ
+            mov r0, r6
+            call sub_blit_seg
             addi r6, 1
             andi r6, SNAKE_SEG_MASK
-            jmp m_bliA
+            jmp m_bliB
 m_bliZ:     nop
 
-m_sfx:      sng 0x44, 0x6343           ; Play a short noise sample every step
+m_sfx:      ldm r0, var_gotitem
+            cmpi r0, 1
+            jz m_cyc_end
+            sng 0x44, 0x6343           ; Play a short noise sample every step
             ldi r0, var_sfx_move
             snp r0, 32
 
@@ -348,6 +384,26 @@ sub_death:     bgc 3
                bgc 1
                ret
 ;--------------------------------------
+; sub_getitem()
+;--------------------------------------
+sub_getitem:   bgc 13
+               vblnk
+               cmpi rc, SNAKE_SEG_NB_MAX
+               jz sub_getiteA
+               addi rc, 1
+sub_getiteA:   ldm r0, var_score
+               addi r0, 100
+               stm r0, var_score
+               ldi r0, var_sfx_item
+               sng 0x44, 0x8283
+               snp r0, 100
+               ldi r0, 1
+               stm r0, var_gotitem
+               cmpi rc, SNAKE_SEG_NB_MAX
+               jz sub_getiteZ
+               stm r0, var_snake_grew
+sub_getiteZ:   ret
+;--------------------------------------
 ; sub_get_av16(ptr, i)
 ;--------------------------------------
 sub_get_av16:  shl r1, 1
@@ -371,7 +427,7 @@ sub_set_av16:  shl r1, 1
 ;--------------------------------------
 ; sub_set_av8(ptr, i, val)
 ;--------------------------------------
-sub_set_av8:  shl r1, 1
+sub_set_av8:   shl r1, 1
                add r0, r1
                ldm r1, r0
                andi r1, 0xff00
@@ -383,7 +439,7 @@ sub_set_av8:  shl r1, 1
 ; sub_unpack8b(x)
 ;--------------------------------------
 sub_unpack8b:  mov r1, r0
-               shl r0, 8
+               shr r0, 8
                andi r1, 0xff
                ret
 ;--------------------------------------
@@ -392,10 +448,10 @@ sub_unpack8b:  mov r1, r0
 sub_unpack4b:  mov r1, r0
                mov r2, r0
                mov r3, r0
-               shl r0, 12
-               shl r1, 8
+               shr r0, 12
+               shr r1, 8
                andi r1, 0xf
-               shl r2, 4
+               shr r2, 4
                andi r2, 0xf
                andi r3, 0xf
                ret
@@ -489,8 +545,14 @@ var_sfx_death1:
    dw 890
 var_sfx_death2:
    dw 1020
+var_sfx_item:
+   dw 2000
 ;--------------------------------------
 var_snake_grew:
+   dw 0
+var_gotitem:
+   dw 0
+var_itemxy:
    dw 0
 ;--------------------------------------
 var_score:
