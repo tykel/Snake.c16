@@ -32,8 +32,8 @@
 ;--------------------------------------
 SNAKE_SPR_W                equ   16
 SNAKE_SEG_NB_INIT          equ   3
-SNAKE_SEG_NB_MAX           equ   8
-SNAKE_SEG_MASK             equ   0x7
+SNAKE_SEG_NB_MAX           equ   32
+SNAKE_SEG_MASK             equ   31
 SCREEN_W                   equ   320
 SCREEN_TILES_HRZ           equ   20
 SCREEN_H                   equ   240
@@ -59,6 +59,7 @@ importbin gfx/font.bin 0 3072 spr_font
 ;--------------------------------------
 m_reset:    ldi rf, 0                  ; Reset zero register
 m_start:    ldi rc, 1                  ; Reset snake size
+            ldi re, 15                 ; Reset game speed
             ldi r8, 160                ; Snake head at screen center
             ldi r9, 128
             ldi r0, var_snake_pos_arr  ; Zero snake pos. array
@@ -83,11 +84,12 @@ m_cyc_loop: nop
             stm rf, var_snake_grew
             stm rf, var_gotitem
 
-m_itm_spwn: rnd r0, 16                 ; Spawn an item approximately every 16
-            cmpi r0, 0                 ; cycles (~4 seconds with start speed)
+m_itm_spwn: ldm r0, var_itemxy
+            cmpi r0, 0
             jnz m_itm_spwZ
-is:         rnd r0, 20
-            rnd r1, 14
+is:         rnd r0, 19
+            rnd r1, 13
+            addi r1, 1
             mov r2, r0
             shl r2, 8
             or r2, r1
@@ -116,17 +118,21 @@ m_check_hd: mov r0, r8
 m_check_hA: cmpi r0, 2                 ; If the head hits a two cell...
             jnz m_check_hZ
             call sub_getitem           ; ...we got an item!
-            ldm r0, var_itemxy
+            ldm r0, var_itemxy         ; Reset item's map cell to 0
             call sub_unpack8b
             ldi r2, 0
             call sub_setmapv
+            stm rf, var_itemxy         ; Reset item's x/y to 0
 m_check_hZ: nop
             
 m_inc_size: addi ra, 1
             andi ra, SNAKE_SEG_MASK
             cmpi rc, SNAKE_SEG_NB_INIT ; Increase snake size if still going...
-            jge m_inc_sizY             ; ...through initial growth phase...
-            addi rc, 1 
+            jl m_inc_sizA             ; ...through initial growth phase...
+            ldm r0, var_gotitem
+            cmpi r0, 0
+            jz m_inc_sizY
+m_inc_sizA: addi rc, 1 
             ldi r0, 1
             stm r0, var_snake_grew     ; ...and record it in a boolean
             jmp m_inc_sizZ
@@ -167,7 +173,7 @@ m_blit:     spr 0x0804                 ; Font sprite size is 8x8
             ldi r2, 0
             call sub_print
             ldi r0, var_str_score_val  ; Convert score to ASCII-BCD
-            mov r1, rc
+            ldm r1, var_score
             call sub_valtobcd
             ldi r0, var_str_score_val  ; And print it
             ldi r1, 56
@@ -177,7 +183,7 @@ m_blit:     spr 0x0804                 ; Font sprite size is 8x8
             ldm r0, var_itemxy
             cmpi r0, 0                 ; If an item has spawned...
             jz m_bliA                  ; ...draw it
-            call sub_unpack8b
+bh:         call sub_unpack8b
             shl r0, 4
             shl r1, 4
 bi:         drw r0, r1, spr_fruit0
@@ -203,7 +209,10 @@ m_sfx:      ldm r0, var_gotitem
 
 m_cyc_end:  ldi r0, 0                  ; Reset accumulated input mask
             stm r0, var_input_acc
-            ldi r0, 15                 ; Wait for 0.16 seconds
+            ldm r0, var_score
+            addi r0, 1
+            stm r0, var_score
+            mov r0, re                 ; Wait for 0.16 seconds
             call sub_wait
 m_cyc_enZ:  jmp m_cyc_loop             ; And on to next game loop iteration
 
@@ -397,7 +406,10 @@ sub_getiteA:   ldm r0, var_score
                ldi r0, var_sfx_item
                sng 0x44, 0x8283
                snp r0, 100
-               ldi r0, 1
+               cmpi re, 2
+               jz sub_getiteY
+               subi re, 1
+sub_getiteY:   ldi r0, 1
                stm r0, var_gotitem
                cmpi rc, SNAKE_SEG_NB_MAX
                jz sub_getiteZ
