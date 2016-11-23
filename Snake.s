@@ -408,7 +408,9 @@ sub_getiteA:   ldm r0, var_score
                snp r0, 100
                cmpi re, 2
                jz sub_getiteY
+               shl re, 1
                subi re, 1
+               shr re, 1
 sub_getiteY:   ldi r0, 1
                stm r0, var_gotitem
                cmpi rc, SNAKE_SEG_NB_MAX
