@@ -43,12 +43,14 @@ CHAR_SPR_LEN               equ   32
 CHAR_ASCII_OFFS            equ   32
 CHAR_0_OFFS                equ   48
 MAP_SIZE                   equ   280
+NUM_LIVES                  equ   1
 ;--------------------------------------
 
 ;--------------------------------------
 ; Graphics imports
 ;--------------------------------------
 importbin gfx/snake_seg.bin 0 128 spr_snake_seg
+importbin gfx/snake_life.bin 0 32 spr_snake_life
 importbin gfx/fruit0.bin 0 128 spr_fruit0
 importbin gfx/font.bin 0 3072 spr_font
 ;--------------------------------------
@@ -58,6 +60,9 @@ importbin gfx/font.bin 0 3072 spr_font
 ; Main code
 ;--------------------------------------
 m_reset:    ldi rf, 0                  ; Reset zero register
+            stm rf, var_score
+            ldi r0, NUM_LIVES
+            stm r0, var_lives
 m_start:    ldi rc, 1                  ; Reset snake size
             ldi re, 15                 ; Reset game speed
             ldi r8, 160                ; Snake head at screen center
@@ -68,6 +73,9 @@ m_start:    ldi rc, 1                  ; Reset snake size
             ldi r0, var_levelmap       ; Zero level collision map
             ldi r1, MAP_SIZE
             call sub_clear_arr
+            stm rf, var_itemxy
+            stm rf, var_gotitem
+            stm rf, var_snake_grew
             ldi ra, 0                  ; Reset snake head index
             ldi rb, 0                  ; Reset snake tail index
             mov r0, r8                 ; Store initial head position in array
@@ -112,10 +120,14 @@ m_check_hd: mov r0, r8
             cmpi r0, 0                 ; If the head hits a zero cell,
             jz m_check_hZ              ; nothing happens
             cmpi r0, 1                 ; If the head hits a one cell...
-            jnz m_check_hA
-            call sub_death             ; ...it's game over!
-            jmp m_start                ; Followed by a restart
-m_check_hA: cmpi r0, 2                 ; If the head hits a two cell...
+            jnz m_check_hB
+            call sub_death             ; ...we dead
+            cmpi r0, 0                 ; If no lives are left, game over!
+            jg m_check_hA
+            call sub_gameover
+            jmp m_reset
+m_check_hA: jmp m_start                ; Followed by a restart
+m_check_hB: cmpi r0, 2                 ; If the head hits a two cell...
             jnz m_check_hZ
             call sub_getitem           ; ...we got an item!
             ldm r0, var_itemxy         ; Reset item's map cell to 0
@@ -179,25 +191,38 @@ m_blit:     spr 0x0804                 ; Font sprite size is 8x8
             ldi r1, 56
             ldi r2, 0
             call sub_print
-            spr 0x1008                 ; Snake sprite size is 16x16
+            ldi r0, var_str_lives      ; Print "LIVES: "
+            ldi r1, 104
+            ldi r2, 0
+            call sub_print
+            ldi r0, 160                ; Draw a sprite for each life left
+            ldi r1, 0
+            ldm r2, var_lives
+m_bliA:     cmpi r2, 0
+            jz m_bliB
+            drw r0, r1, spr_snake_life
+            addi r0, 16
+            subi r2, 1
+            jmp m_bliA
+m_bliB:     spr 0x1008                 ; Snake sprite size is 16x16
             ldm r0, var_itemxy
             cmpi r0, 0                 ; If an item has spawned...
-            jz m_bliA                  ; ...draw it
-bh:         call sub_unpack8b
+            jz m_bliC                  ; ...draw it
+            call sub_unpack8b
             shl r0, 4
             shl r1, 4
-bi:         drw r0, r1, spr_fruit0
-m_bliA:     mov r6, rb
+            drw r0, r1, spr_fruit0
+m_bliC:     mov r6, rb
             mov r7, ra
             addi r7, 1
             andi r7, SNAKE_SEG_MASK
-m_bliB:     cmp r6, r7
+m_bliD:     cmp r6, r7
             jz m_bliZ
             mov r0, r6
             call sub_blit_seg
             addi r6, 1
             andi r6, SNAKE_SEG_MASK
-            jmp m_bliB
+            jmp m_bliD
 m_bliZ:     nop
 
 m_sfx:      ldm r0, var_gotitem
@@ -391,6 +416,21 @@ sub_death:     bgc 3
                ldi r0, 135
                call sub_wait
                bgc 1
+               ldm r0, var_lives
+               subi r0, 1
+               stm r0, var_lives
+               ret
+;--------------------------------------
+; sub_gameover()
+;--------------------------------------
+sub_gameover:  cls
+               spr 0x0804
+               ldi r0, var_str_gameover
+               ldi r1, 88
+               ldi r2, 116
+               call sub_print
+               ldi r0, 240
+               call sub_wait
                ret
 ;--------------------------------------
 ; sub_getitem()
@@ -549,6 +589,12 @@ var_str_score:
    db 0
 var_str_score_val:
    db 0, 0, 0, 0, 0, 0
+var_str_lives:
+   db "LIVES: "
+   db 0
+var_str_gameover:
+   db "G A M E    O V E R"
+   db 0
 ;--------------------------------------
 var_sfx_move:
    dw 1000
@@ -571,3 +617,5 @@ var_itemxy:
 ;--------------------------------------
 var_score:
    dw 0
+var_lives:
+    dw 0
