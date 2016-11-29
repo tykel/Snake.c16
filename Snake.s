@@ -87,8 +87,6 @@ m_start:    ldi rc, 1                  ; Reset snake size
             stm r0, var_snake_pos_arr
 
 m_cyc_loop: nop
-            cls
-            bgc 1                      ; Black background
             stm rf, var_snake_grew
             stm rf, var_gotitem
 
@@ -106,12 +104,19 @@ is:         rnd r0, 19
             call sub_setmapv
 m_itm_spwZ: nop
 
+m_chkpause: ldm r0, var_input_acc       ; Read controller 0
+            andi r0, 32                 ; Preserve START bit
+            jz m_move_hd
+            call sub_pause              ; Go into Pause mode
+
 m_move_hd:  ldm r0, var_input_acc      ; Read controller 0
             andi r0, 0xf               ; Mask out all bits but Up,Dn,Lf,Rt
             jz m_move_hZ
             call sub_change_dir        ; Changing direction if != 0
 m_move_hZ:  call sub_move_in_dir       ; Now move one step
 
+m_clearscr: cls
+            bgc 1                      ; Black background
 m_check_hd: mov r0, r8
             shr r0, 4
             mov r1, r9
@@ -433,6 +438,54 @@ sub_gameover:  cls
                call sub_wait
                ret
 ;--------------------------------------
+; sub_pause()
+;--------------------------------------
+sub_pause:      ldi r0, var_str_pause
+                ldi r1, 240
+                ldi r2, 0
+                spr 0x0804
+                call sub_print
+                ldi r1, 2
+sub_pausA:      cmpi r1, 0
+                jz sub_pausB
+                push r1
+                ldi r0, var_sfx_pause1
+                sng 0x44, 0x6243
+                snp r0, 100
+                ldi r0, 6 
+                call sub_wait
+                ldi r0, var_sfx_pause0
+                snp r0, 100
+                ldi r0, 6
+                call sub_wait
+                pop r1
+                subi r1, 1
+                jmp sub_pausA
+sub_pausB:      ldm r0, 0xfff0
+                andi r0, 32
+                jnz sub_pausC
+                vblnk
+                jmp sub_pausB
+sub_pausC:      stm rf, 0xfff0
+                stm rf, var_input_acc
+                ldi r1, 2
+sub_pausD:      cmpi r1, 0
+                jz sub_pausZ
+                push r1
+                ldi r0, var_sfx_pause1
+                sng 0x44, 0x6243
+                snp r0, 100
+                ldi r0, 6 
+                call sub_wait
+                ldi r0, var_sfx_pause0
+                snp r0, 100
+                ldi r0, 6
+                call sub_wait
+                pop r1
+                subi r1, 1
+                jmp sub_pausD
+sub_pausZ:      ret
+;--------------------------------------
 ; sub_getitem()
 ;--------------------------------------
 sub_getitem:   bgc 13
@@ -444,7 +497,7 @@ sub_getiteA:   ldm r0, var_score
                addi r0, 100
                stm r0, var_score
                ldi r0, var_sfx_item
-               sng 0x44, 0x8283
+               sng 0x44, 0x8387
                snp r0, 100
                cmpi re, 2
                jz sub_getiteY
@@ -595,10 +648,12 @@ var_str_lives:
 var_str_gameover:
    db "G A M E    O V E R"
    db 0
+var_str_pause:
+    db "(PAUSED)"
+    db 0
 ;--------------------------------------
 var_sfx_move:
    dw 1000
-;--------------------------------------
 var_sfx_death0:
    dw 1102
 var_sfx_death1:
@@ -606,7 +661,11 @@ var_sfx_death1:
 var_sfx_death2:
    dw 1020
 var_sfx_item:
-   dw 2000
+   dw 1975
+var_sfx_pause0:
+    dw 1567
+var_sfx_pause1:
+    dw 1318
 ;--------------------------------------
 var_snake_grew:
    dw 0
