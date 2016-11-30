@@ -43,7 +43,7 @@ CHAR_SPR_LEN               equ   32
 CHAR_ASCII_OFFS            equ   32
 CHAR_0_OFFS                equ   48
 MAP_SIZE                   equ   280
-NUM_LIVES                  equ   1
+NUM_LIVES                  equ   3
 ;--------------------------------------
 
 ;--------------------------------------
@@ -54,8 +54,7 @@ importbin gfx/snake_life.bin 0 32 spr_snake_life
 importbin gfx/fruit0.bin 0 128 spr_fruit0
 importbin gfx/font.bin 0 3072 spr_font
 ;--------------------------------------
-
-
+ 
 ;--------------------------------------
 ; Main code
 ;--------------------------------------
@@ -434,7 +433,10 @@ sub_gameover:  cls
                ldi r1, 88
                ldi r2, 116
                call sub_print
-               ldi r0, 240
+               sng 0x34, 0xc3cb
+               ldi r0, var_sfx_gameover
+               snp r0, 1000
+               ldi r0, 300
                call sub_wait
                ret
 ;--------------------------------------
@@ -449,12 +451,12 @@ sub_pause:      ldi r0, var_str_pause
 sub_pausA:      cmpi r1, 0
                 jz sub_pausB
                 push r1
-                ldi r0, var_sfx_pause1
+                ldi r0, var_sfx_pause0
                 sng 0x44, 0x6243
                 snp r0, 100
                 ldi r0, 6 
                 call sub_wait
-                ldi r0, var_sfx_pause0
+                ldi r0, var_sfx_pause1
                 snp r0, 100
                 ldi r0, 6
                 call sub_wait
@@ -660,6 +662,8 @@ var_sfx_death1:
    dw 890
 var_sfx_death2:
    dw 1020
+var_sfx_gameover:
+   dw 300
 var_sfx_item:
    dw 1975
 var_sfx_pause0:
