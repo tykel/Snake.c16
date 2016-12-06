@@ -18,14 +18,14 @@
 ;--------------------------------------
 
 ; TODO:
-;  - Write head + segs to level collision map
-;  - Make items appear randomly, write to map
-;  - Check head for collisions with items/segs
-;  - Increase num_segs + score for item collision
-;  - Increase speed every N items picked up
-;  - Add intro screen
-;  - Add game over screen
-;  - Add music to intro/game over screens
+; [x]Write head + segs to level collision map
+; [x]Make items appear randomly, write to map
+; [x]Check head for collisions with items/segs
+; [x]Increase num_segs + score for item collision
+; [x]Increase speed every N items picked up
+; [ ]Add intro screen
+; [x]Add game over screen
+; [ ]Add music to intro/game over screens
 
 ;--------------------------------------
 ; Constants
@@ -63,6 +63,9 @@ m_reset:    ldi rf, 0                  ; Reset zero register
             stm rf, var_score
             ldi r0, NUM_LIVES
             stm r0, var_lives
+
+m_intro:    call sub_intro
+
 m_start:    ldi rc, 1                  ; Reset snake size
             ldi re, 60                 ; Reset game speed (15 cyc/step)
             ldi r8, 160                ; Snake head at screen center
@@ -486,6 +489,46 @@ sub_pausD:      cmpi r1, 0
                 subi r1, 1
                 jmp sub_pausD
 sub_pausZ:      ret
+;--------------------------------------
+; sub_intro()
+;--------------------------------------
+sub_intro:      bgc 1
+                cls
+                spr 0x0804
+                ldi r1, 88
+                ldi r2, 82
+                drw r1, r2, spr_snake_life
+                addi r1, 144
+                drw r1, r2, spr_snake_life
+                ldi r0, var_str_title
+                ldi r1, 112
+                ldi r2, 82
+                call sub_print
+                ldi r0, var_str_copyright
+                ldi r1, 104
+                ldi r2, 224
+                call sub_print
+                ldi r0, var_str_start
+                ldi r1, 128
+                ldi r2, 136
+                call sub_print
+                ldi r1, 112
+                ldi r2, 135
+                drw r1, r2, spr_cursor
+                ldi r0, var_str_options
+                ldi r1, 128
+                ldi r2, 152
+                call sub_print
+sub_intrA:      ldm r0, 0xfff0
+                tsti r0, 32
+                jnz sub_intrZ
+                vblnk
+                jmp sub_intrA
+sub_intrZ:      ldi r0, 6
+                call sub_wait
+                stm rf, 0xfff0
+                stm rf, var_input_acc
+                ret
 ;--------------------------------------
 ; sub_getitem()
 ;--------------------------------------
