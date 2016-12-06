@@ -13,7 +13,7 @@
 ; rb: snake tail index
 ; rc: snake length
 ; rd: snake direction (0=up, 1=down, 2=left, 3=right)
-; re: wait frames/cycle (1/FPS)
+; re: wait frames/cycle << 2
 ; rf: zero register
 ;--------------------------------------
 
@@ -30,14 +30,14 @@
 ;--------------------------------------
 ; Constants
 ;--------------------------------------
-SNAKE_SPR_W                equ   16
+SNAKE_SPR_W                equ   8
 SNAKE_SEG_NB_INIT          equ   3
-SNAKE_SEG_NB_MAX           equ   32
+SNAKE_SEG_NB_MAX           equ   128 
 SNAKE_SEG_MASK             equ   31
 SCREEN_W                   equ   320
-SCREEN_TILES_HRZ           equ   20
+SCREEN_TILES_HRZ           equ   40
 SCREEN_H                   equ   240
-SCREEN_TILES_VRT           equ   14
+SCREEN_TILES_VRT           equ   29
 CHAR_SPR_W                 equ   8
 CHAR_SPR_LEN               equ   32
 CHAR_ASCII_OFFS            equ   32
@@ -49,9 +49,10 @@ NUM_LIVES                  equ   3
 ;--------------------------------------
 ; Graphics imports
 ;--------------------------------------
-importbin gfx/snake_seg.bin 0 128 spr_snake_seg
+importbin gfx/snake_seg.bin 0 32 spr_snake_seg
 importbin gfx/snake_life.bin 0 32 spr_snake_life
-importbin gfx/fruit0.bin 0 128 spr_fruit0
+importbin gfx/cursor.bin 0 32 spr_cursor
+importbin gfx/fruit0.bin 0 32 spr_fruit0
 importbin gfx/font.bin 0 3072 spr_font
 ;--------------------------------------
  
@@ -63,7 +64,7 @@ m_reset:    ldi rf, 0                  ; Reset zero register
             ldi r0, NUM_LIVES
             stm r0, var_lives
 m_start:    ldi rc, 1                  ; Reset snake size
-            ldi re, 15                 ; Reset game speed
+            ldi re, 60                 ; Reset game speed (15 cyc/step)
             ldi r8, 160                ; Snake head at screen center
             ldi r9, 128
             ldi r0, var_snake_pos_arr  ; Zero snake pos. array
@@ -78,10 +79,10 @@ m_start:    ldi rc, 1                  ; Reset snake size
             ldi ra, 0                  ; Reset snake head index
             ldi rb, 0                  ; Reset snake tail index
             mov r0, r8                 ; Store initial head position in array
-            shr r0, 4
+            shr r0, 3
             shl r0, 8
             mov r1, r9
-            shr r1, 4
+            shr r1, 3
             or r0, r1
             stm r0, var_snake_pos_arr
 
@@ -92,8 +93,8 @@ m_cyc_loop: nop
 m_itm_spwn: ldm r0, var_itemxy
             cmpi r0, 0
             jnz m_itm_spwZ
-is:         rnd r0, 19
-            rnd r1, 13
+is:         rnd r0, 39
+            rnd r1, 28
             addi r1, 1
             mov r2, r0
             shl r2, 8
@@ -117,9 +118,9 @@ m_move_hZ:  call sub_move_in_dir       ; Now move one step
 m_clearscr: cls
             bgc 1                      ; Black background
 m_check_hd: mov r0, r8
-            shr r0, 4
+            shr r0, 3
             mov r1, r9
-            shr r1, 4
+            shr r1, 3
             call sub_getmapv
             cmpi r0, 0                 ; If the head hits a zero cell,
             jz m_check_hZ              ; nothing happens
@@ -157,10 +158,10 @@ m_inc_sizY: addi rb, 1                 ; snake_seg_offs = (snake_seg_offs+1) % 8
 m_inc_sizZ: nop
 
 m_move_seg: mov r0, r8                 ; int xy = (snake_head_x << 8)
-            shr r0, 4
+            shr r0, 3
             shl r0, 8                  ;              | snake_head_y;
             mov r1, r9
-            shr r1, 4
+            shr r1, 3
             or r0, r1
             mov r1, ra                 ; int *p = snake_seg_offs
             shl r1, 1                  ;              + &var_snake_pos_arr;
@@ -208,13 +209,13 @@ m_bliA:     cmpi r2, 0
             addi r0, 16
             subi r2, 1
             jmp m_bliA
-m_bliB:     spr 0x1008                 ; Snake sprite size is 16x16
+m_bliB:     spr 0x0804                 ; Snake sprite size is 8x8
             ldm r0, var_itemxy
             cmpi r0, 0                 ; If an item has spawned...
             jz m_bliC                  ; ...draw it
             call sub_unpack8b
-            shl r0, 4
-            shl r1, 4
+            shl r0, 3
+            shl r1, 3
             drw r0, r1, spr_fruit0
 m_bliC:     mov r6, rb
             mov r7, ra
@@ -238,10 +239,8 @@ m_sfx:      ldm r0, var_gotitem
 
 m_cyc_end:  ldi r0, 0                  ; Reset accumulated input mask
             stm r0, var_input_acc
-            ldm r0, var_score
-            addi r0, 1
-            stm r0, var_score
             mov r0, re                 ; Wait for 0.16 seconds
+            shr r0, 2
             call sub_wait
 m_cyc_enZ:  jmp m_cyc_loop             ; And on to next game loop iteration
 
@@ -270,9 +269,9 @@ sub_blit_seg:  shl r0, 1
                ldm r0, r0                 ; int x = *n;
                mov r1, r0                 ; int y = x;
                shr r0, 8                  ; x = x >> 8;
-               shl r0, 4
+               shl r0, 3
                andi r1, 0xff              ; y = y & 0xff;
-               shl r1, 4
+               shl r1, 3
 x:             drw r0, r1, spr_snake_seg  ; drw(x, y, spr_snake_seg);
                ret
 ;--------------------------------------
@@ -501,11 +500,9 @@ sub_getiteA:   ldm r0, var_score
                ldi r0, var_sfx_item
                sng 0x44, 0x8387
                snp r0, 100
-               cmpi re, 2
+               cmpi re, 1
                jz sub_getiteY
-               shl re, 1
                subi re, 1
-               shr re, 1
 sub_getiteY:   ldi r0, 1
                stm r0, var_gotitem
                cmpi rc, SNAKE_SEG_NB_MAX
@@ -594,13 +591,115 @@ var_snake_pos_arr:
    dw 0, 0, 0, 0, 0, 0, 0, 0
    dw 0, 0, 0, 0, 0, 0, 0, 0
    dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0
 ;--------------------------------------
 var_snake_dir_dx:
-   dw 0, 0, -16, 16
+   dw 0, 0, -8, 8
 var_snake_dir_dy:
-   dw -16, 16, 0, 0
+   dw -8, 8, 0, 0
 ;--------------------------------------
 var_levelmap:
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
    dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
    dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
    dw 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -652,6 +751,18 @@ var_str_gameover:
    db 0
 var_str_pause:
     db "(PAUSED)"
+    db 0
+var_str_title:
+    db "S  N  A  K  E"
+    db 0
+var_str_copyright:
+    db "(C) tykel, 2016"
+    db 0
+var_str_start:
+    db "START"
+    db 0
+var_str_options:
+    db "OPTIONS"
     db 0
 ;--------------------------------------
 var_sfx_move:

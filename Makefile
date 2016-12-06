@@ -12,8 +12,10 @@ Snake.c16: Snake.s gfx
 	ctags --language-force=asm $< 
 
 gfx:
+	$(IMG) gfx/fruit0.bmp -o gfx/fruit0.bin $(IMGFLAGS)
 	$(IMG) gfx/snake_seg.bmp -o gfx/snake_seg.bin $(IMGFLAGS)
 	$(IMG) gfx/snake_life.bmp -o gfx/snake_life.bin $(IMGFLAGS)
+	$(IMG) gfx/cursor.bmp -o gfx/cursor.bin $(IMGFLAGS)
 
 clean:
 	rm -rf Snake.c16
