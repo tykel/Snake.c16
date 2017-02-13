@@ -2,20 +2,22 @@ AS=as16
 ASFLAGS=
 IMG=img16
 IMGFLAGS=-k 1
+GFX=gfx/fruit0.bin gfx/snake_seg.bin gfx/snake_life.bin gfx/cursor.bin
 
 .PHONY: all gfx clean
 
-all: Snake.c16
+all: Snake.c16 Music.c16
 
-Snake.c16: Snake.s gfx
+Snake.c16: Snake.s $(GFX)
 	$(AS) $< $(ASFLAGS) -o $@ -m
 	ctags --language-force=asm $< 
 
-gfx:
-	$(IMG) gfx/fruit0.bmp -o gfx/fruit0.bin $(IMGFLAGS)
-	$(IMG) gfx/snake_seg.bmp -o gfx/snake_seg.bin $(IMGFLAGS)
-	$(IMG) gfx/snake_life.bmp -o gfx/snake_life.bin $(IMGFLAGS)
-	$(IMG) gfx/cursor.bmp -o gfx/cursor.bin $(IMGFLAGS)
+Music.c16: Music.s
+	$(AS) $< $(ASFLAGS) -o $@ -m
+	ctags --language-force=asm $< 
+
+gfx/%.bin: gfx/%.bmp
+	$(IMG) $< -o $@ $(IMGFLAGS)
 
 clean:
 	rm -rf Snake.c16

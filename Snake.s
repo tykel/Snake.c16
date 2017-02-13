@@ -492,8 +492,8 @@ sub_pausZ:      ret
 ;--------------------------------------
 ; sub_intro()
 ;--------------------------------------
-sub_intro:      bgc 1
-                cls
+sub_intro:      cls
+                bgc 1
                 spr 0x0804
                 ldi r1, 88
                 ldi r2, 82
@@ -513,7 +513,9 @@ sub_intro:      bgc 1
                 ldi r2, 136
                 call sub_print
                 ldi r1, 112
-                ldi r2, 135
+                ldm r2, var_cursor_hl
+                shl r2, 4
+                addi r2, 135
                 drw r1, r2, spr_cursor
                 ldi r0, var_str_options
                 ldi r1, 128
@@ -521,10 +523,68 @@ sub_intro:      bgc 1
                 call sub_print
 sub_intrA:      ldm r0, 0xfff0
                 tsti r0, 32
-                jnz sub_intrZ
+                jnz sub_intrY
+                tsti r0, 16
+                jnz sub_intrX
                 vblnk
                 jmp sub_intrA
+sub_intrX:      ldm r0, var_cursor_hl
+                addi r0, 1
+                andi r0, 1
+                stm r0, var_cursor_hl
+                ldi r0, 6
+                call sub_wait
+                stm rf, 0xfff0
+                stm rf, var_input_acc
+                jmp sub_intro
+sub_intrY:      ldm r0, var_cursor_hl
+                cmpi r0, 0
+                jz sub_intrZ
+                stm rf, 0xfff0
+                stm rf, var_input_acc
+                call sub_options
+                jmp sub_intro
 sub_intrZ:      ldi r0, 6
+                call sub_wait
+                stm rf, 0xfff0
+                stm rf, var_input_acc
+                ret
+;--------------------------------------
+; sub_options()
+;--------------------------------------
+sub_options:    cls
+                bgc 1
+                spr 0x0804
+                ldi r0, var_str_numlives
+                ldi r1, 128
+                ldi r2, 136
+                call sub_print
+                ldi r1, 112
+                ldm r2, var_cursor_hl
+                shl r2, 4
+                addi r2, 135
+                drw r1, r2, spr_cursor
+                ldi r0, var_str_startspd
+                ldi r1, 128
+                ldi r2, 152
+                call sub_print
+sub_optionA:    ldm r0, 0xfff0
+                tsti r0, 32
+                jnz sub_optionZ
+                tsti r0, 16
+                jnz sub_optionY
+                vblnk
+                jmp sub_optionA
+sub_optionY:    ldm r0, var_cursor_hl
+                addi r0, 1
+                andi r0, 1
+                stm r0, var_cursor_hl
+                ldi r0, 6
+                call sub_wait
+                stm rf, 0xfff0
+                stm rf, var_input_acc
+                jmp sub_options
+sub_optionZ:    ldi r0, 6
                 call sub_wait
                 stm rf, 0xfff0
                 stm rf, var_input_acc
@@ -807,6 +867,17 @@ var_str_start:
 var_str_options:
     db "OPTIONS"
     db 0
+var_str_numlives:
+    db "NUM LIVES: "
+    db 0
+var_str_startspd:
+    db "START SPD: "
+    db 0
+var_str_startspd_val:
+    db 0, 0, 0 
+var_str_startspdunits:
+    db " FRAMES/STEP (LARGE=SLOW)"
+    db 0
 ;--------------------------------------
 var_sfx_move:
    dw 1000
@@ -832,6 +903,12 @@ var_gotitem:
 var_itemxy:
    dw 0
 ;--------------------------------------
+var_cursor_hl:
+   dw 0
+var_startlives:
+    dw 0
+var_startspd:
+    dw 15 
 var_score:
    dw 0
 var_lives:
